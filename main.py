@@ -40,7 +40,8 @@ def main():
 
     #  load data
     bundle_train_data, bundle_test_data, item_data, assist_data = \
-            dataset.get_dataset(CONFIG['path'], CONFIG['dataset_name'], task=CONFIG['task'])
+        dataset.get_dataset(
+            CONFIG['path'], CONFIG['dataset_name'], task=CONFIG['task'])
 
     train_loader = DataLoader(bundle_train_data, 2048, True,
                               num_workers=8, pin_memory=True)
@@ -58,7 +59,8 @@ def main():
     bi_graph = assist_data.ground_truth_b_i
 
     #  metric
-    metrics = [Recall(20), NDCG(20), Recall(40), NDCG(40), Recall(80), NDCG(80)]
+    metrics = [Recall(1), NDCG(1), Recall(3), NDCG(3), Recall(5), NDCG(5),
+               Recall(10), NDCG(10), Recall(20), NDCG(20)]
     TARGET = 'Recall@20'
 
     #  loss
@@ -66,7 +68,7 @@ def main():
 
     #  log
     log = logger.Logger(os.path.join(
-        CONFIG['log'], CONFIG['dataset_name'], 
+        CONFIG['log'], CONFIG['dataset_name'],
         f"{CONFIG['model']}_{CONFIG['task']}", ''), 'best', checkpoint_target=TARGET)
 
     theta = 0.6
@@ -76,17 +78,18 @@ def main():
     for lr, decay, message_dropout, node_dropout \
             in product(CONFIG['lrs'], CONFIG['decays'], CONFIG['message_dropouts'], CONFIG['node_dropouts']):
 
-        visual_path =  os.path.join(CONFIG['visual'], 
-                                    CONFIG['dataset_name'],  
-                                    f"{CONFIG['model']}_{CONFIG['task']}", 
-                                    f"{time_path}@{CONFIG['note']}", 
-                                    f"lr{lr}_decay{decay}_medr{message_dropout}_nodr{node_dropout}")
+        visual_path = os.path.join(CONFIG['visual'],
+                                   CONFIG['dataset_name'],
+                                   f"{CONFIG['model']}_{CONFIG['task']}",
+                                   f"{time_path}@{CONFIG['note']}",
+                                   f"lr{lr}_decay{decay}_medr{message_dropout}_nodr{node_dropout}")
 
         # model
         if CONFIG['model'] == 'BGCN':
             graph = [ub_graph, ui_graph, bi_graph]
             info = BGCN_Info(64, decay, message_dropout, node_dropout, 2)
-            model = BGCN(info, assist_data, graph, device, pretrain=None).to(device)
+            model = BGCN(info, assist_data, graph,
+                         device, pretrain=None).to(device)
 
         assert model.__class__.__name__ == CONFIG['model']
 
@@ -96,7 +99,7 @@ def main():
         env = {'lr': lr,
                'op': str(op).split(' ')[0],   # Adam
                'dataset': CONFIG['dataset_name'],
-               'model': CONFIG['model'], 
+               'model': CONFIG['model'],
                'sample': CONFIG['sample'],
                }
 
@@ -106,30 +109,41 @@ def main():
             print('load model and continue training')
 
         retry = CONFIG['retry']  # =1
+        best_metrics = init_best_metrics(test_metrics=metrics)
+
         while retry >= 0:
             # log
             log.update_modelinfo(info, env, metrics)
             try:
                 # train & test
-                early = CONFIG['early']  
-                train_writer = SummaryWriter(log_dir=visual_path, comment='train')
-                test_writer = SummaryWriter(log_dir=visual_path, comment='test') 
+                early = CONFIG['early']
+                train_writer = SummaryWriter(
+                    log_dir=visual_path, comment='train')
+                test_writer = SummaryWriter(
+                    log_dir=visual_path, comment='test')
                 for epoch in range(CONFIG['epochs']):
                     # train
-                    trainloss = train(model, epoch+1, train_loader, op, device, CONFIG, loss_func)
-                    train_writer.add_scalars('loss/single', {"loss": trainloss}, epoch)
+                    trainloss = train(model, epoch+1, train_loader,
+                                      op, device, CONFIG, loss_func)
+                    train_writer.add_scalars(
+                        'loss/single', {"loss": trainloss}, epoch)
 
                     # test
-                    if epoch % CONFIG['test_interval'] == 0:  
-                        output_metrics = test(model, test_loader, device, CONFIG, metrics)
+                    if epoch % CONFIG['test_interval'] == 0:
+                        output_metrics = test(
+                            model, test_loader, device, CONFIG, metrics)
+
+                        get_best_epoch(output_metrics, best_metrics=best_metrics, epoch=epoch)
 
                         for metric in output_metrics:
-                            test_writer.add_scalars('metric/all', {metric.get_title(): metric.metric}, epoch)
-                            if metric==output_metrics[0]:
-                                test_writer.add_scalars('metric/single', {metric.get_title(): metric.metric}, epoch)
+                            test_writer.add_scalars(
+                                'metric/all', {metric.get_title(): metric.metric}, epoch)
+                            if metric == output_metrics[0]:
+                                test_writer.add_scalars(
+                                    'metric/single', {metric.get_title(): metric.metric}, epoch)
 
                         # log
-                        log.update_log(metrics, model) 
+                        log.update_log(metrics, model)
 
                         # check overfitting
                         if epoch > 10:
@@ -149,6 +163,22 @@ def main():
                 retry -= 1
     log.close()
 
+def init_best_metrics(test_metrics):
+    best_metrics = {}
+
+    for topk in test_metrics:
+        best_metrics[topk.get_title()] = 0.0
+
+    return best_metrics
+
+def get_best_epoch(metrics, best_metrics, epoch):
+    n = len(metrics)
+    if metrics[n-1].metric > best_metrics[metrics[n-1].get_title()] and metrics[n-2].metric > best_metrics[metrics[n-2].get_title()]:
+        topk_ = 20  
+        print("top%d as the final evaluation standard" %(topk_))
+        for metric in metrics:
+            best_metrics[metric.get_title()] = metric.metric
+            print(f"Best in epoch: {epoch+1}, {metric.get_title()}: {metric.metric}")
 
 if __name__ == "__main__":
     main()
