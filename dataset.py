@@ -81,6 +81,7 @@ class BundleTrainDataset(BasicDataset):
         self.ground_truth_u_b = sp.coo_matrix(
             (values, (indice[:, 0], indice[:, 1])), shape=(self.num_users, self.num_bundles)).tocsr()
 
+
         print_statistics(self.ground_truth_u_b, 'U-B statistics in train')
 
         if CONFIG['sample'] == 'hard': 
@@ -203,6 +204,7 @@ class AssistDataset(BasicDataset):
         self.ground_truth_b_i = sp.coo_matrix(
             (values, (indice[:, 0], indice[:, 1])), shape=(self.num_bundles, self.num_items)).tocsr()
 
+        print(f"Dataset: {self.name}")
         print_statistics(self.ground_truth_b_i, 'B-I statistics')
 
 
