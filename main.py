@@ -178,7 +178,7 @@ def get_best_epoch(metrics, best_metrics, epoch):
         print(f"Top% {topk_} - {metrics[2].get_title()}, {metrics[3].get_title()} as the final evaluation standard")
         for metric in metrics:
             best_metrics[metric.get_title()] = metric.metric
-            print(f"Best in epoch: {epoch+1}, {metric.get_title()}: {metric.metric}")
+            print(f"Best in epoch {epoch+1}, {metric.get_title()}: {metric.metric}")
 
 if __name__ == "__main__":
     main()
